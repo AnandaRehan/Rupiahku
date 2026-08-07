@@ -1,0 +1,6 @@
+{
+  "name": "RupiahKu - Keuangan & Tagihan",
+  "description": "Aplikasi pencatatan keuangan modern IDR, pengingat tagihan pintar, dan sistem backup cloud otomatis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
