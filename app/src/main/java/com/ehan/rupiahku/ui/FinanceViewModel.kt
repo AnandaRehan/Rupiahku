@@ -125,9 +125,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             )
             _toastMessage.emit("Transaksi berhasil disimpan")
 
-            // Auto cloud backup if setting is real-time
+            // Auto file backup if setting is real-time
             if (_appSettings.value.autoBackupEnabled && _appSettings.value.backupFrequency == "Real-time") {
-                repository.performCloudBackup(isAuto = true)
+                repository.performLocalBackup(isAuto = true)
             }
         }
     }
@@ -189,29 +189,65 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun triggerCloudBackup() {
+    fun exportBackupToFileUri(uri: android.net.Uri) {
         viewModelScope.launch {
             _isBackupRunning.value = true
             try {
-                val log = repository.performCloudBackup(isAuto = false)
-                _toastMessage.emit("Backup Cloud Sukses! (${log.recordCount} catatan tersimpan)")
+                val success = repository.exportDataToUri(uri)
+                if (success) {
+                    _toastMessage.emit("File backup berhasil disimpan!")
+                } else {
+                    _toastMessage.emit("Gagal menyimpan file backup")
+                }
             } catch (e: Exception) {
-                _toastMessage.emit("Gagal melakukan backup cloud: ${e.localizedMessage}")
+                _toastMessage.emit("Error saat ekspor file: ${e.localizedMessage}")
             } finally {
                 _isBackupRunning.value = false
             }
         }
     }
 
-    fun restoreCloudData() {
+    fun importBackupFromFileUri(uri: android.net.Uri) {
         viewModelScope.launch {
             _isBackupRunning.value = true
             try {
-                val success = repository.restoreDataFromCloud()
+                val success = repository.importDataFromUri(uri)
                 if (success) {
-                    _toastMessage.emit("Data berhasil dipulihkan dari Cloud!")
+                    _toastMessage.emit("Data berhasil dimuat & dipulihkan dari file!")
                 } else {
-                    _toastMessage.emit("Tidak ada file backup cloud yang ditemukan")
+                    _toastMessage.emit("Format file backup tidak valid atau gagal dibaca")
+                }
+            } catch (e: Exception) {
+                _toastMessage.emit("Error saat impor file: ${e.localizedMessage}")
+            } finally {
+                _isBackupRunning.value = false
+            }
+        }
+    }
+
+    fun triggerLocalBackup() {
+        viewModelScope.launch {
+            _isBackupRunning.value = true
+            try {
+                val log = repository.performLocalBackup(isAuto = false)
+                _toastMessage.emit("Backup Lokal Berhasil! (${log.recordCount} entri tersimpan)")
+            } catch (e: Exception) {
+                _toastMessage.emit("Gagal melakukan backup lokal: ${e.localizedMessage}")
+            } finally {
+                _isBackupRunning.value = false
+            }
+        }
+    }
+
+    fun restoreLocalBackup() {
+        viewModelScope.launch {
+            _isBackupRunning.value = true
+            try {
+                val success = repository.restoreDataFromLocalFile()
+                if (success) {
+                    _toastMessage.emit("Data berhasil dipulihkan dari snapshot lokal!")
+                } else {
+                    _toastMessage.emit("Tidak ada snapshot file backup lokal yang ditemukan")
                 }
             } catch (e: Exception) {
                 _toastMessage.emit("Gagal memulihkan data: ${e.localizedMessage}")

@@ -109,7 +109,7 @@ fun BudgetsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
-            items(expenseCategories, key = { it.id }) { cat ->
+            items(expenseCategories, key = { "cat_${it.id}" }) { cat ->
                 val spent = categorySpentMap[cat.name] ?: 0.0
                 BudgetProgressBar(
                     category = cat,

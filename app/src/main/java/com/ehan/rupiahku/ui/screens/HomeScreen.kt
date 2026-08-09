@@ -143,7 +143,7 @@ fun HomeScreen(
                 }
             }
 
-            items(upcomingBills.take(2), key = { it.id }) { bill ->
+            items(upcomingBills.take(2), key = { "bill_${it.id}" }) { bill ->
                 BillReminderCard(
                     bill = bill,
                     onPayClick = { onPayBill(bill) },
@@ -196,7 +196,7 @@ fun HomeScreen(
                 }
             }
         } else {
-            items(recentTransactions.take(5), key = { it.id }) { tx ->
+            items(recentTransactions.take(5), key = { "tx_${it.id}" }) { tx ->
                 TransactionItemCard(
                     transaction = tx,
                     onDeleteClick = { onDeleteTransaction(tx) }

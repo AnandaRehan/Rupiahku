@@ -1,6 +1,5 @@
 package com.ehan.rupiahku.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +13,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,7 +40,6 @@ import androidx.compose.ui.unit.sp
 import com.ehan.rupiahku.data.model.AppSettings
 import com.ehan.rupiahku.data.model.BackupHistoryEntity
 import com.ehan.rupiahku.ui.theme.EmeraldPrimary
-import com.ehan.rupiahku.ui.theme.GoldAccent
 import com.ehan.rupiahku.util.DateUtils
 
 @Composable
@@ -49,15 +47,15 @@ fun CloudBackupStatusCard(
     latestBackupLog: BackupHistoryEntity?,
     appSettings: AppSettings,
     isBackupRunning: Boolean,
-    onBackupNowClick: () -> Unit,
-    onRestoreClick: () -> Unit,
+    onExportFileClick: () -> Unit,
+    onImportFileClick: () -> Unit,
     onAutoBackupToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("cloud_backup_card"),
+            .testTag("file_backup_card"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -76,8 +74,8 @@ fun CloudBackupStatusCard(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Default.CloudDone,
-                                contentDescription = "Cloud",
+                                imageVector = Icons.Default.FolderZip,
+                                contentDescription = "File Backup",
                                 tint = EmeraldPrimary,
                                 modifier = Modifier.size(24.dp)
                             )
@@ -86,7 +84,7 @@ fun CloudBackupStatusCard(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Status Backup Cloud",
+                            text = "Backup & Pemulihan File",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onSurface
@@ -100,7 +98,7 @@ fun CloudBackupStatusCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Terenkripsi & Tersinkronisasi",
+                                text = "Format File JSON (.json)",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -129,7 +127,7 @@ fun CloudBackupStatusCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Backup Terakhir:",
+                            text = "Aktivitas File Terakhir:",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -146,12 +144,12 @@ fun CloudBackupStatusCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Jumlah Record Data:",
+                            text = "Status / Ukuran File:",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = if (latestBackupLog != null) "${latestBackupLog.recordCount} entri (${latestBackupLog.fileSizeFormatted})" else "-",
+                            text = if (latestBackupLog != null) "${latestBackupLog.backupType} • ${latestBackupLog.recordCount} entri (${latestBackupLog.fileSizeFormatted})" else "-",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
@@ -167,13 +165,13 @@ fun CloudBackupStatusCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Button(
-                    onClick = onBackupNowClick,
+                    onClick = onExportFileClick,
                     enabled = !isBackupRunning,
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
                     modifier = Modifier
                         .weight(1f)
-                        .testTag("btn_backup_now")
+                        .testTag("btn_export_file")
                 ) {
                     if (isBackupRunning) {
                         CircularProgressIndicator(
@@ -183,32 +181,33 @@ fun CloudBackupStatusCard(
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Default.CloudUpload,
-                            contentDescription = "Backup",
+                            imageVector = Icons.Default.FileUpload,
+                            contentDescription = "Simpan File",
                             modifier = Modifier.size(16.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "Backup Cloud", fontSize = 13.sp)
+                    Text(text = "Simpan File", fontSize = 13.sp)
                 }
 
                 OutlinedButton(
-                    onClick = onRestoreClick,
+                    onClick = onImportFileClick,
                     enabled = !isBackupRunning,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .testTag("btn_restore_cloud")
+                        .testTag("btn_import_file")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CloudDownload,
-                        contentDescription = "Restore",
+                        imageVector = Icons.Default.FileDownload,
+                        contentDescription = "Muat File",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "Pulihkan Data", fontSize = 13.sp)
+                    Text(text = "Muat File", fontSize = 13.sp)
                 }
             }
         }
     }
 }
+

@@ -1,6 +1,7 @@
 package com.ehan.rupiahku.data.repository
 
 import android.content.Context
+import android.net.Uri
 import com.ehan.rupiahku.data.local.AppDatabase
 import com.ehan.rupiahku.data.model.BackupHistoryEntity
 import com.ehan.rupiahku.data.model.BillEntity
@@ -15,7 +16,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
 import java.util.Calendar
 
 class FinanceRepository(private val context: Context) {
@@ -98,9 +101,9 @@ class FinanceRepository(private val context: Context) {
         billDao.updateBillPaidStatus(bill.id, isPaid = false, paidDateMillis = null)
     }
 
-    // --- AUTOMATIC CLOUD BACKUP SYSTEM ---
+    // --- FILE BACKUP & RESTORE SYSTEM ---
 
-    suspend fun performCloudBackup(isAuto: Boolean = false): BackupHistoryEntity = withContext(Dispatchers.IO) {
+    suspend fun generateBackupJsonObject(): JSONObject = withContext(Dispatchers.IO) {
         val transactionsList = transactionDao.getAllTransactions().first()
         val categoriesList = categoryDao.getAllCategories().first()
         val billsList = billDao.getAllBills().first()
@@ -108,6 +111,7 @@ class FinanceRepository(private val context: Context) {
         val jsonRoot = JSONObject()
         jsonRoot.put("exportTimestamp", System.currentTimeMillis())
         jsonRoot.put("app", "RupiahKu")
+        jsonRoot.put("version", "1.0")
         jsonRoot.put("currency", "IDR")
 
         val txArray = JSONArray()
@@ -153,21 +157,98 @@ class FinanceRepository(private val context: Context) {
         }
         jsonRoot.put("bills", billArray)
 
+        jsonRoot
+    }
+
+    suspend fun exportDataToUri(uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val jsonRoot = generateBackupJsonObject()
+            val jsonString = jsonRoot.toString(2)
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(jsonString.toByteArray(Charsets.UTF_8))
+                outputStream.flush()
+            }
+
+            val totalRecords = (jsonRoot.optJSONArray("transactions")?.length() ?: 0) +
+                    (jsonRoot.optJSONArray("categories")?.length() ?: 0) +
+                    (jsonRoot.optJSONArray("bills")?.length() ?: 0)
+
+            val sizeBytes = jsonString.toByteArray(Charsets.UTF_8).size
+            val sizeKb = "%.1f KB".format(sizeBytes / 1024.0)
+
+            val backupLog = BackupHistoryEntity(
+                timestampMillis = System.currentTimeMillis(),
+                recordCount = totalRecords,
+                backupType = "EKSPOR_FILE",
+                fileSizeFormatted = sizeKb,
+                status = "SUCCESS"
+            )
+            backupHistoryDao.insertBackupLog(backupLog)
+
+            NotificationHelper.showBackupSuccessNotification(
+                context,
+                recordCount = totalRecords,
+                timestampFormatted = DateUtils.formatDateTime(backupLog.timestampMillis)
+            )
+
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    suspend fun importDataFromUri(uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val stringBuilder = StringBuilder()
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { reader ->
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        stringBuilder.append(line)
+                    }
+                }
+            }
+            val jsonString = stringBuilder.toString()
+            if (jsonString.isBlank()) return@withContext false
+
+            val success = restoreDataFromJsonString(jsonString)
+            if (success) {
+                val backupLog = BackupHistoryEntity(
+                    timestampMillis = System.currentTimeMillis(),
+                    recordCount = 0,
+                    backupType = "IMPOR_FILE",
+                    fileSizeFormatted = "OK",
+                    status = "SUCCESS"
+                )
+                backupHistoryDao.insertBackupLog(backupLog)
+            }
+            success
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    suspend fun performLocalBackup(isAuto: Boolean = false): BackupHistoryEntity = withContext(Dispatchers.IO) {
+        val jsonRoot = generateBackupJsonObject()
         val jsonString = jsonRoot.toString(2)
 
-        // Save local cloud snapshot file inside internal storage
-        val backupDir = File(context.filesDir, "cloud_backups")
+        val backupDir = File(context.filesDir, "file_backups")
         if (!backupDir.exists()) backupDir.mkdirs()
-        val backupFile = File(backupDir, "rupiahku_cloud_latest.json")
+        val backupFile = File(backupDir, "rupiahku_backup_latest.json")
         backupFile.writeText(jsonString)
 
-        val totalRecords = transactionsList.size + categoriesList.size + billsList.size
+        val totalRecords = (jsonRoot.optJSONArray("transactions")?.length() ?: 0) +
+                (jsonRoot.optJSONArray("categories")?.length() ?: 0) +
+                (jsonRoot.optJSONArray("bills")?.length() ?: 0)
+
         val sizeKb = (backupFile.length() / 1024.0).let { if (it < 1.0) "1.2 KB" else "%.1f KB".format(it) }
 
         val backupLog = BackupHistoryEntity(
             timestampMillis = System.currentTimeMillis(),
             recordCount = totalRecords,
-            backupType = if (isAuto) "CLOUD_AUTO" else "CLOUD_MANUAL",
+            backupType = if (isAuto) "FILE_OTOMATIS" else "FILE_MANUAL",
             fileSizeFormatted = sizeKb,
             status = "SUCCESS"
         )
@@ -183,13 +264,22 @@ class FinanceRepository(private val context: Context) {
         backupLog
     }
 
-    suspend fun restoreDataFromCloud(): Boolean = withContext(Dispatchers.IO) {
-        val backupDir = File(context.filesDir, "cloud_backups")
-        val backupFile = File(backupDir, "rupiahku_cloud_latest.json")
+    suspend fun restoreDataFromLocalFile(): Boolean = withContext(Dispatchers.IO) {
+        val backupDir = File(context.filesDir, "file_backups")
+        val backupFile = File(backupDir, "rupiahku_backup_latest.json")
         if (!backupFile.exists()) return@withContext false
 
         return@withContext try {
             val jsonString = backupFile.readText()
+            restoreDataFromJsonString(jsonString)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    suspend fun restoreDataFromJsonString(jsonString: String): Boolean = withContext(Dispatchers.IO) {
+        return@withContext try {
             val jsonRoot = JSONObject(jsonString)
 
             val txArray = jsonRoot.optJSONArray("transactions") ?: JSONArray()
@@ -264,9 +354,12 @@ class FinanceRepository(private val context: Context) {
     }
 
     suspend fun getLatestBackupJsonString(): String = withContext(Dispatchers.IO) {
-        val backupDir = File(context.filesDir, "cloud_backups")
-        val backupFile = File(backupDir, "rupiahku_cloud_latest.json")
-        if (backupFile.exists()) backupFile.readText() else "Belum ada data backup cloud."
+        val backupDir = File(context.filesDir, "file_backups")
+        val backupFile = File(backupDir, "rupiahku_backup_latest.json")
+        if (backupFile.exists()) backupFile.readText() else {
+            val jsonRoot = generateBackupJsonObject()
+            jsonRoot.toString(2)
+        }
     }
 
     // --- SEED INITIAL DEFAULT DATA FOR FIRST LAUNCH ---
@@ -376,7 +469,8 @@ class FinanceRepository(private val context: Context) {
         )
         defaultBills.forEach { billDao.insertBill(it) }
 
-        // Perform initial cloud backup
-        performCloudBackup(isAuto = true)
+        // Perform initial local file backup
+        performLocalBackup(isAuto = true)
     }
 }
+

@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -40,10 +40,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ehan.rupiahku.ui.FinanceViewModel
 import com.ehan.rupiahku.ui.components.AddBillBottomSheet
 import com.ehan.rupiahku.ui.components.AddTransactionBottomSheet
-import com.ehan.rupiahku.ui.screens.BackupScreen
 import com.ehan.rupiahku.ui.screens.BillsScreen
 import com.ehan.rupiahku.ui.screens.BudgetsScreen
 import com.ehan.rupiahku.ui.screens.HomeScreen
+import com.ehan.rupiahku.ui.screens.SettingsScreen
 import com.ehan.rupiahku.ui.screens.TransactionsScreen
 import com.ehan.rupiahku.ui.theme.EmeraldPrimary
 import com.ehan.rupiahku.ui.theme.RupiahKuTheme
@@ -56,7 +56,7 @@ sealed class NavTab(val route: String, val title: String, val icon: ImageVector)
     object Transactions : NavTab("transactions", "Transaksi", Icons.Default.ReceiptLong)
     object Bills : NavTab("bills", "Tagihan", Icons.Default.NotificationsActive)
     object Budgets : NavTab("budgets", "Anggaran", Icons.Default.AccountBalance)
-    object Backup : NavTab("backup", "Backup", Icons.Default.CloudDone)
+    object Settings : NavTab("settings", "Pengaturan", Icons.Default.Settings)
 }
 
 class MainActivity : ComponentActivity() {
@@ -117,7 +117,7 @@ fun MainAppScreen(viewModel: FinanceViewModel) {
                     NavTab.Transactions,
                     NavTab.Bills,
                     NavTab.Budgets,
-                    NavTab.Backup
+                    NavTab.Settings
                 )
 
                 tabs.forEach { tab ->
@@ -185,18 +185,17 @@ fun MainAppScreen(viewModel: FinanceViewModel) {
                     )
                 }
 
-                NavTab.Backup -> {
-                    BackupScreen(
+                NavTab.Settings -> {
+                    SettingsScreen(
                         appSettings = appSettings,
                         backupLogs = backupLogs,
                         isBackupRunning = isBackupRunning,
-                        onBackupNowClick = { viewModel.triggerCloudBackup() },
-                        onRestoreClick = { viewModel.restoreCloudData() },
+                        onExportToFileUri = { viewModel.exportBackupToFileUri(it) },
+                        onImportFromFileUri = { viewModel.importBackupFromFileUri(it) },
+                        onTriggerLocalBackup = { viewModel.triggerLocalBackup() },
+                        onRestoreLocalBackup = { viewModel.restoreLocalBackup() },
                         onAutoBackupToggle = { enabled ->
                             viewModel.updateAutoBackupSetting(enabled, appSettings.backupFrequency)
-                        },
-                        onUpdateFrequency = { freq ->
-                            viewModel.updateAutoBackupSetting(appSettings.autoBackupEnabled, freq)
                         },
                         onFetchJsonPayload = { viewModel.getJsonBackupPayload() }
                     )

@@ -174,7 +174,7 @@ fun TransactionsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    items(filteredTransactions, key = { it.id }) { tx ->
+                    items(filteredTransactions, key = { "tx_${it.id}" }) { tx ->
                         TransactionItemCard(
                             transaction = tx,
                             onDeleteClick = { onDeleteTransaction(tx) }

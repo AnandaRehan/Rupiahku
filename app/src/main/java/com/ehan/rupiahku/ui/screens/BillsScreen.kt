@@ -186,7 +186,7 @@ fun BillsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    items(filteredBills, key = { it.id }) { bill ->
+                    items(filteredBills, key = { "bill_${it.id}" }) { bill ->
                         BillReminderCard(
                             bill = bill,
                             onPayClick = { onPayBill(bill) },
