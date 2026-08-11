@@ -32,9 +32,9 @@ jobs:
       - name: Beri Izin Akses Gradle
         run: chmod +x gradlew
 
-      - name: Remove debug signingConfig from build.gradle.kts
-        run: |
-          sed -i 's/signingConfig = signingConfigs.getByName("debugConfig")//g' app/build.gradle.kts
+      #- name: Remove debug signingConfig from build.gradle.kts
+      #  run: |
+      #    sed -i 's/signingConfig = signingConfigs.getByName("debugConfig")//g' app/build.gradle.kts
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --no-configuration-cache --stacktrace
