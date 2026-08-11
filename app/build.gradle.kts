@@ -36,11 +36,14 @@ android {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/release.jks"
       val ksFile = file(keystorePath)
+      val envStorePass = System.getenv("STORE_PASSWORD")?.trim()?.takeIf { it.isNotEmpty() }
+      val envKeyAlias = System.getenv("KEY_ALIAS")?.trim()?.takeIf { it.isNotEmpty() } ?: "upload"
+      val envKeyPass = System.getenv("KEY_PASSWORD")?.trim()?.takeIf { it.isNotEmpty() } ?: envStorePass
       if (ksFile.exists()) {
         storeFile = ksFile
-        storePassword = System.getenv("STORE_PASSWORD") ?: ""
-        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
-        keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+        storePassword = envStorePass ?: ""
+        keyAlias = envKeyAlias
+        keyPassword = envKeyPass ?: ""
       }
     }
   }
@@ -50,9 +53,17 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      val releaseKs = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/release.jks")
+      val envStorePass = System.getenv("STORE_PASSWORD")?.trim()?.takeIf { it.isNotEmpty() }
+      if (releaseKs.exists() && envStorePass != null) {
+        signingConfig = signingConfigs.getByName("release")
+      } else {
+        signingConfig = signingConfigs.getByName("debug")
+      }
     }
-    debug { signingConfig = signingConfigs.getByName("debug") }
+    debug {
+      signingConfig = signingConfigs.getByName("debug")
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11

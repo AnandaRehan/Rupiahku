@@ -1,0 +1,75 @@
+name: Build Signed Release APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    name: Build Signed Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Decode Keystore from Secrets (if provided)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+            echo "Keystore release.jks decoded successfully."
+          else
+            echo "No KEYSTORE_BASE64 secret provided."
+          fi
+
+      - name: Check Signing Environment
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -f release.jks ]; then
+            echo "release.jks file exists."
+            if [ -n "$STORE_PASSWORD" ]; then
+              echo "STORE_PASSWORD secret is configured."
+            else
+              echo "WARNING: STORE_PASSWORD secret is empty. Release build will fallback to debug signing."
+            fi
+            if [ -n "$KEY_ALIAS" ]; then
+              echo "KEY_ALIAS secret is configured."
+            else
+              echo "WARNING: KEY_ALIAS secret is empty. Defaulting alias to 'upload'."
+            fi
+          fi
+
+      - name: Generate Gradle Wrapper if missing
+        run: |
+          if [ ! -f ./gradlew ]; then
+            gradle wrapper
+          fi
+
+      - name: Beri Izin Akses Gradle
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/release.jks
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon --no-configuration-cache --stacktrace
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: RupiahKu-release-apk
+          path: app/build/outputs/apk/release/*.apk
