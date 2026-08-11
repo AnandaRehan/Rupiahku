@@ -7,6 +7,8 @@ import androidx.room.RoomDatabase
 import com.ehan.rupiahku.data.model.BackupHistoryEntity
 import com.ehan.rupiahku.data.model.BillEntity
 import com.ehan.rupiahku.data.model.CategoryEntity
+import com.ehan.rupiahku.data.model.DebtEntity
+import com.ehan.rupiahku.data.model.DebtPaymentEntity
 import com.ehan.rupiahku.data.model.TransactionEntity
 
 @Database(
@@ -14,9 +16,11 @@ import com.ehan.rupiahku.data.model.TransactionEntity
         TransactionEntity::class,
         CategoryEntity::class,
         BillEntity::class,
-        BackupHistoryEntity::class
+        BackupHistoryEntity::class,
+        DebtEntity::class,
+        DebtPaymentEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,6 +29,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun billDao(): BillDao
     abstract fun backupHistoryDao(): BackupHistoryDao
+    abstract fun debtDao(): DebtDao
+    abstract fun debtPaymentDao(): DebtPaymentDao
 
     companion object {
         @Volatile

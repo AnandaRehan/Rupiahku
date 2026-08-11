@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.ReceiptLong
@@ -42,6 +43,7 @@ import com.ehan.rupiahku.ui.components.AddBillBottomSheet
 import com.ehan.rupiahku.ui.components.AddTransactionBottomSheet
 import com.ehan.rupiahku.ui.screens.BillsScreen
 import com.ehan.rupiahku.ui.screens.BudgetsScreen
+import com.ehan.rupiahku.ui.screens.DebtsScreen
 import com.ehan.rupiahku.ui.screens.HomeScreen
 import com.ehan.rupiahku.ui.screens.SettingsScreen
 import com.ehan.rupiahku.ui.screens.TransactionsScreen
@@ -55,6 +57,7 @@ sealed class NavTab(val route: String, val title: String, val icon: ImageVector)
     object Home : NavTab("home", "Dasbor", Icons.Default.Home)
     object Transactions : NavTab("transactions", "Transaksi", Icons.Default.ReceiptLong)
     object Bills : NavTab("bills", "Tagihan", Icons.Default.NotificationsActive)
+    object Debts : NavTab("debts", "Hutang", Icons.Default.Handshake)
     object Budgets : NavTab("budgets", "Anggaran", Icons.Default.AccountBalance)
     object Settings : NavTab("settings", "Pengaturan", Icons.Default.Settings)
 }
@@ -90,15 +93,18 @@ fun MainAppScreen(viewModel: FinanceViewModel) {
     val transactions by viewModel.transactions.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val bills by viewModel.bills.collectAsStateWithLifecycle()
+    val debts by viewModel.debts.collectAsStateWithLifecycle()
     val backupLogs by viewModel.backupLogs.collectAsStateWithLifecycle()
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val isBackupRunning by viewModel.isBackupRunning.collectAsStateWithLifecycle()
 
     var showAddTxSheet by remember { mutableStateOf(false) }
     var showAddBillSheet by remember { mutableStateOf(false) }
+    var showAddDebtSheet by remember { mutableStateOf(false) }
 
     val addTxSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val addBillSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val addDebtSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Listen to Toast Messages
     LaunchedEffect(Unit) {
@@ -116,6 +122,7 @@ fun MainAppScreen(viewModel: FinanceViewModel) {
                     NavTab.Home,
                     NavTab.Transactions,
                     NavTab.Bills,
+                    NavTab.Debts,
                     NavTab.Budgets,
                     NavTab.Settings
                 )
@@ -172,6 +179,29 @@ fun MainAppScreen(viewModel: FinanceViewModel) {
                         onAddBillClick = { showAddBillSheet = true },
                         onPayBill = { viewModel.payBill(it) },
                         onDeleteBill = { viewModel.deleteBill(it) }
+                    )
+                }
+
+                NavTab.Debts -> {
+                    DebtsScreen(
+                        debts = debts,
+                        sheetState = addDebtSheetState,
+                        onAddDebtClick = { showAddDebtSheet = true },
+                        onDismissAddSheet = { showAddDebtSheet = false },
+                        onAddDebtSubmit = { personName, type, title, totalAmount, dueDateMillis, note ->
+                            viewModel.addDebt(personName, type, title, totalAmount, dueDateMillis, note)
+                            scope.launch { addDebtSheetState.hide() }.invokeOnCompletion {
+                                showAddDebtSheet = false
+                            }
+                        },
+                        onPayDebt = { debt, amount, note, recordAsTx ->
+                            viewModel.payDebt(debt, amount, note, recordAsTx)
+                        },
+                        onDeleteDebt = { viewModel.deleteDebt(it) },
+                        onFetchDebtPayments = { debtId ->
+                            viewModel.getDebtPayments(debtId)
+                        },
+                        showAddDebtSheet = showAddDebtSheet
                     )
                 }
 

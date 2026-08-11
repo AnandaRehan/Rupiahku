@@ -9,6 +9,8 @@ import androidx.room.Update
 import com.ehan.rupiahku.data.model.BackupHistoryEntity
 import com.ehan.rupiahku.data.model.BillEntity
 import com.ehan.rupiahku.data.model.CategoryEntity
+import com.ehan.rupiahku.data.model.DebtEntity
+import com.ehan.rupiahku.data.model.DebtPaymentEntity
 import com.ehan.rupiahku.data.model.TransactionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -94,4 +96,46 @@ interface BackupHistoryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(list: List<BackupHistoryEntity>)
+}
+
+@Dao
+interface DebtDao {
+    @Query("SELECT * FROM debts ORDER BY isPaidOff ASC, createdDateMillis DESC")
+    fun getAllDebts(): Flow<List<DebtEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDebt(debt: DebtEntity): Long
+
+    @Update
+    suspend fun updateDebt(debt: DebtEntity)
+
+    @Delete
+    suspend fun deleteDebt(debt: DebtEntity)
+
+    @Query("DELETE FROM debts")
+    suspend fun deleteAll()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(list: List<DebtEntity>)
+}
+
+@Dao
+interface DebtPaymentDao {
+    @Query("SELECT * FROM debt_payments WHERE debtId = :debtId ORDER BY paymentDateMillis DESC")
+    fun getPaymentsForDebt(debtId: Long): Flow<List<DebtPaymentEntity>>
+
+    @Query("SELECT * FROM debt_payments ORDER BY paymentDateMillis DESC")
+    fun getAllDebtPayments(): Flow<List<DebtPaymentEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPayment(payment: DebtPaymentEntity): Long
+
+    @Query("DELETE FROM debt_payments WHERE debtId = :debtId")
+    suspend fun deletePaymentsForDebt(debtId: Long)
+
+    @Query("DELETE FROM debt_payments")
+    suspend fun deleteAll()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(list: List<DebtPaymentEntity>)
 }

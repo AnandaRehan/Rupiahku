@@ -48,6 +48,29 @@ data class BackupHistoryEntity(
     val status: String = "SUCCESS" // "SUCCESS", "FAILED"
 )
 
+@Entity(tableName = "debts")
+data class DebtEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val personName: String,
+    val type: String, // "HUTANG" (Saya Berhutang) or "PIUTANG" (Orang Berhutang ke Saya)
+    val title: String,
+    val totalAmount: Double,
+    val paidAmount: Double = 0.0,
+    val dueDateMillis: Long? = null,
+    val createdDateMillis: Long = System.currentTimeMillis(),
+    val isPaidOff: Boolean = false,
+    val note: String = ""
+)
+
+@Entity(tableName = "debt_payments")
+data class DebtPaymentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val debtId: Long,
+    val amount: Double,
+    val paymentDateMillis: Long = System.currentTimeMillis(),
+    val note: String = ""
+)
+
 data class AppSettings(
     val autoBackupEnabled: Boolean = true,
     val backupFrequency: String = "Harian", // "Real-time", "Harian", "Mingguan"

@@ -6,6 +6,8 @@ import com.ehan.rupiahku.data.local.AppDatabase
 import com.ehan.rupiahku.data.model.BackupHistoryEntity
 import com.ehan.rupiahku.data.model.BillEntity
 import com.ehan.rupiahku.data.model.CategoryEntity
+import com.ehan.rupiahku.data.model.DebtEntity
+import com.ehan.rupiahku.data.model.DebtPaymentEntity
 import com.ehan.rupiahku.data.model.TransactionEntity
 import com.ehan.rupiahku.util.CurrencyUtils
 import com.ehan.rupiahku.util.DateUtils
@@ -28,11 +30,18 @@ class FinanceRepository(private val context: Context) {
     private val categoryDao = db.categoryDao()
     private val billDao = db.billDao()
     private val backupHistoryDao = db.backupHistoryDao()
+    private val debtDao = db.debtDao()
+    private val debtPaymentDao = db.debtPaymentDao()
 
     val allTransactions: Flow<List<TransactionEntity>> = transactionDao.getAllTransactions()
     val allCategories: Flow<List<CategoryEntity>> = categoryDao.getAllCategories()
     val allBills: Flow<List<BillEntity>> = billDao.getAllBills()
     val allBackupLogs: Flow<List<BackupHistoryEntity>> = backupHistoryDao.getAllBackupLogs()
+    val allDebts: Flow<List<DebtEntity>> = debtDao.getAllDebts()
+
+    fun getPaymentsForDebt(debtId: Long): Flow<List<DebtPaymentEntity>> {
+        return debtPaymentDao.getPaymentsForDebt(debtId)
+    }
 
     suspend fun insertTransaction(transaction: TransactionEntity) {
         transactionDao.insertTransaction(transaction)
@@ -101,6 +110,79 @@ class FinanceRepository(private val context: Context) {
         billDao.updateBillPaidStatus(bill.id, isPaid = false, paidDateMillis = null)
     }
 
+    // --- DEBT & LOAN MANAGEMENT ---
+
+    suspend fun addDebt(
+        personName: String,
+        type: String, // "HUTANG" or "PIUTANG"
+        title: String,
+        totalAmount: Double,
+        dueDateMillis: Long?,
+        note: String
+    ) {
+        val debt = DebtEntity(
+            personName = personName,
+            type = type,
+            title = title,
+            totalAmount = totalAmount,
+            paidAmount = 0.0,
+            dueDateMillis = dueDateMillis,
+            createdDateMillis = System.currentTimeMillis(),
+            isPaidOff = false,
+            note = note
+        )
+        debtDao.insertDebt(debt)
+    }
+
+    suspend fun payDebt(
+        debt: DebtEntity,
+        paymentAmount: Double,
+        paymentNote: String,
+        recordAsTransaction: Boolean
+    ) {
+        val newPaidAmount = (debt.paidAmount + paymentAmount).coerceAtMost(debt.totalAmount)
+        val isPaidOff = newPaidAmount >= debt.totalAmount
+        val updatedDebt = debt.copy(
+            paidAmount = newPaidAmount,
+            isPaidOff = isPaidOff
+        )
+        debtDao.updateDebt(updatedDebt)
+
+        val paymentLog = DebtPaymentEntity(
+            debtId = debt.id,
+            amount = paymentAmount,
+            paymentDateMillis = System.currentTimeMillis(),
+            note = paymentNote
+        )
+        debtPaymentDao.insertPayment(paymentLog)
+
+        if (recordAsTransaction) {
+            val categoryName = if (debt.type == "HUTANG") "Tagihan & Utilitas" else "Gaji & Pendapatan"
+            val txType = if (debt.type == "HUTANG") "EXPENSE" else "INCOME"
+            val txTitle = if (debt.type == "HUTANG") {
+                "Bayar Hutang: ${debt.personName} (${debt.title})"
+            } else {
+                "Terima Piutang: ${debt.personName} (${debt.title})"
+            }
+
+            val tx = TransactionEntity(
+                title = txTitle,
+                amount = paymentAmount,
+                type = txType,
+                categoryName = categoryName,
+                accountName = "Dompet Utama",
+                dateMillis = System.currentTimeMillis(),
+                note = if (paymentNote.isNotBlank()) paymentNote else "Pembayaran cicilan $txTitle"
+            )
+            transactionDao.insertTransaction(tx)
+        }
+    }
+
+    suspend fun deleteDebt(debt: DebtEntity) {
+        debtPaymentDao.deletePaymentsForDebt(debt.id)
+        debtDao.deleteDebt(debt)
+    }
+
     // --- FILE BACKUP & RESTORE SYSTEM ---
 
     suspend fun generateBackupJsonObject(): JSONObject = withContext(Dispatchers.IO) {
@@ -156,6 +238,24 @@ class FinanceRepository(private val context: Context) {
             billArray.put(obj)
         }
         jsonRoot.put("bills", billArray)
+
+        val debtsList = debtDao.getAllDebts().first()
+        val debtArray = JSONArray()
+        debtsList.forEach { debt ->
+            val obj = JSONObject()
+            obj.put("id", debt.id)
+            obj.put("personName", debt.personName)
+            obj.put("type", debt.type)
+            obj.put("title", debt.title)
+            obj.put("totalAmount", debt.totalAmount)
+            obj.put("paidAmount", debt.paidAmount)
+            obj.put("dueDateMillis", debt.dueDateMillis ?: 0L)
+            obj.put("createdDateMillis", debt.createdDateMillis)
+            obj.put("isPaidOff", debt.isPaidOff)
+            obj.put("note", debt.note)
+            debtArray.put(obj)
+        }
+        jsonRoot.put("debts", debtArray)
 
         jsonRoot
     }
@@ -334,6 +434,26 @@ class FinanceRepository(private val context: Context) {
                 )
             }
 
+            val debtArray = jsonRoot.optJSONArray("debts") ?: JSONArray()
+            val restoredDebts = mutableListOf<DebtEntity>()
+            for (i in 0 until debtArray.length()) {
+                val obj = debtArray.getJSONObject(i)
+                restoredDebts.add(
+                    DebtEntity(
+                        id = obj.optLong("id", 0),
+                        personName = obj.optString("personName", ""),
+                        type = obj.optString("type", "HUTANG"),
+                        title = obj.optString("title", ""),
+                        totalAmount = obj.optDouble("totalAmount", 0.0),
+                        paidAmount = obj.optDouble("paidAmount", 0.0),
+                        dueDateMillis = if (obj.has("dueDateMillis") && obj.optLong("dueDateMillis") > 0) obj.optLong("dueDateMillis") else null,
+                        createdDateMillis = obj.optLong("createdDateMillis", System.currentTimeMillis()),
+                        isPaidOff = obj.optBoolean("isPaidOff", false),
+                        note = obj.optString("note", "")
+                    )
+                )
+            }
+
             if (restoredTransactions.isNotEmpty()) {
                 transactionDao.deleteAll()
                 transactionDao.insertAll(restoredTransactions)
@@ -345,6 +465,10 @@ class FinanceRepository(private val context: Context) {
             if (restoredBills.isNotEmpty()) {
                 billDao.deleteAll()
                 billDao.insertAll(restoredBills)
+            }
+            if (restoredDebts.isNotEmpty()) {
+                debtDao.deleteAll()
+                debtDao.insertAll(restoredDebts)
             }
             true
         } catch (e: Exception) {
@@ -468,6 +592,44 @@ class FinanceRepository(private val context: Context) {
             )
         )
         defaultBills.forEach { billDao.insertBill(it) }
+
+        // Default Sample Debts (Hutang & Piutang)
+        val debtDueCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, 14) }
+        val piutangDueCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, 7) }
+
+        val debt1 = DebtEntity(
+            personName = "Budi Santoso",
+            type = "HUTANG",
+            title = "Pinjam Modal Usaha",
+            totalAmount = 1500000.0,
+            paidAmount = 500000.0,
+            dueDateMillis = debtDueCal.timeInMillis,
+            createdDateMillis = now - (10 * 86400000L),
+            isPaidOff = false,
+            note = "Sisa dicicil 2x lagi"
+        )
+        val debt1Id = debtDao.insertDebt(debt1)
+        debtPaymentDao.insertPayment(
+            DebtPaymentEntity(
+                debtId = debt1Id,
+                amount = 500000.0,
+                paymentDateMillis = now - (5 * 86400000L),
+                note = "Cicilan Pertama Rp 500.000"
+            )
+        )
+
+        val debt2 = DebtEntity(
+            personName = "Siti Rahma",
+            type = "PIUTANG",
+            title = "Pinjam Uang Belanja",
+            totalAmount = 300000.0,
+            paidAmount = 0.0,
+            dueDateMillis = piutangDueCal.timeInMillis,
+            createdDateMillis = now - (3 * 86400000L),
+            isPaidOff = false,
+            note = "Janji bayar minggu depan"
+        )
+        debtDao.insertDebt(debt2)
 
         // Perform initial local file backup
         performLocalBackup(isAuto = true)

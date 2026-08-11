@@ -8,6 +8,8 @@ import com.ehan.rupiahku.data.model.BackupHistoryEntity
 import com.ehan.rupiahku.data.model.BillEntity
 import com.ehan.rupiahku.data.model.CategoryEntity
 import com.ehan.rupiahku.data.model.DashboardSummary
+import com.ehan.rupiahku.data.model.DebtEntity
+import com.ehan.rupiahku.data.model.DebtPaymentEntity
 import com.ehan.rupiahku.data.model.TransactionEntity
 import com.ehan.rupiahku.data.repository.FinanceRepository
 import com.ehan.rupiahku.util.DateUtils
@@ -41,6 +43,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         )
 
     val bills: StateFlow<List<BillEntity>> = repository.allBills
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val debts: StateFlow<List<DebtEntity>> = repository.allDebts
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -177,6 +186,61 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             repository.deleteBill(bill)
             _toastMessage.emit("Tagihan dihapus")
         }
+    }
+
+    // --- DEBT & LOAN ACTIONS ---
+
+    fun addDebt(
+        personName: String,
+        type: String,
+        title: String,
+        totalAmount: Double,
+        dueDateMillis: Long?,
+        note: String
+    ) {
+        viewModelScope.launch {
+            if (personName.isBlank() || title.isBlank() || totalAmount <= 0) {
+                _toastMessage.emit("Harap isi nama kontak, keterangan, dan nominal")
+                return@launch
+            }
+            repository.addDebt(personName, type, title, totalAmount, dueDateMillis, note)
+            val typeLabel = if (type == "HUTANG") "Hutang" else "Piutang"
+            _toastMessage.emit("Catatan $typeLabel berhasil disimpan")
+        }
+    }
+
+    fun payDebt(
+        debt: DebtEntity,
+        paymentAmount: Double,
+        note: String,
+        recordAsTransaction: Boolean
+    ) {
+        viewModelScope.launch {
+            if (paymentAmount <= 0) {
+                _toastMessage.emit("Harap masukkan nominal pembayaran yang valid")
+                return@launch
+            }
+            repository.payDebt(debt, paymentAmount, note, recordAsTransaction)
+            val isHutang = debt.type == "HUTANG"
+            val totalPaidNow = debt.paidAmount + paymentAmount
+            val isNowLunas = totalPaidNow >= debt.totalAmount
+            if (isNowLunas) {
+                _toastMessage.emit("Selamat! Catatan ${if (isHutang) "Hutang" else "Piutang"} ${debt.personName} telah LUNAS! 🎉")
+            } else {
+                _toastMessage.emit("Pembayaran cicilan berhasil dicatat")
+            }
+        }
+    }
+
+    fun deleteDebt(debt: DebtEntity) {
+        viewModelScope.launch {
+            repository.deleteDebt(debt)
+            _toastMessage.emit("Catatan hapus berhasil")
+        }
+    }
+
+    fun getDebtPayments(debtId: Long): kotlinx.coroutines.flow.Flow<List<DebtPaymentEntity>> {
+        return repository.getPaymentsForDebt(debtId)
     }
 
     fun updateBudgetLimit(categoryName: String, newLimit: Double) {
